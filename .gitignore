@@ -1,0 +1,9 @@
+.gradle
+gradle
+build
+.settings
+.classpath
+.project
+terraform.tfvars.json
+.terraform
+terraform.tfstate*

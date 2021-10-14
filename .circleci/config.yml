@@ -1,0 +1,77 @@
+version: 2.1
+
+jobs:
+  build:
+    working_directory: ~/demo
+    docker:
+      - image: circleci/openjdk:11-jdk
+    steps:
+      - checkout
+      - run:
+          name: build ,test and save
+          command: |
+            ./gradlew clean build
+      - persist_to_workspace:
+          root: ~/demo
+          paths:
+            - build
+            - Dockerfile
+            - kubernetes
+
+  docker-build:
+    working_directory: ~/demo
+    docker:
+      - image: rhinogram/node-awscli:latest
+    steps:
+      - setup_remote_docker:
+          docker_layer_caching: false
+      - attach_workspace:
+          at: ~/demo
+      - run:
+          name: docker build
+          command: |
+            docker build -t ${DOCKER_REPOSITORY}/demo-app:${CIRCLECI_SHA} .
+            docker push ${DOCKER_REPOSITORY}/demo-app:${CIRCLECI_SHA}            
+      - persist_to_workspace:
+          root: ~/demo
+          paths:
+            - kubernetes
+    
+  deploy:
+    working_directory: ~/demo
+    docker:
+      - image: bearengineer/awscli-kubectl
+    steps:
+      - attach_workspace:
+          at: ~/demo
+      - run:
+          name: fetch kubeconfig
+          command: |
+            export AWS_ACCESS_KEY_ID=${ACCESS_KEY}
+            export AWS_SECRET_ACCESS_KEY=${SECRET_KEY}
+            aws eks --region ${REGION} update-kubeconfig --name ${CLUSTER_NAME}
+      - run:
+          name: deploy the image
+          command: |
+            sed -i "s/demo:latest/demo:${CIRCLE_SHA}/g" kubernetes/deployment.yaml -n ${NAMESPACE}
+            kubectl apply -f kubernetes/deployment.yaml -f kubernetes/service.yaml
+
+workflows:
+  version: 2.1
+  build_and_deploy:
+    jobs:
+      - build
+      - docker-build:
+          context: SECRET_STAGE
+          requires:
+            - build
+      - deploy:
+          name: deploy to stage environment
+          context: 
+            - SECRET_STAGE
+          requires:
+            - docker-build
+          filters:
+            branches:
+              only:
+                - master
