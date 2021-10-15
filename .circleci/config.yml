@@ -30,6 +30,7 @@ jobs:
       - run:
           name: docker build
           command: |
+            docker login ${DOCKER_REPOSITORY} --password ${DOCKER_PASSWORD} --user ${DOCKER_USER}
             docker build -t ${DOCKER_REPOSITORY}/demo-app:${CIRCLECI_SHA} .
             docker push ${DOCKER_REPOSITORY}/demo-app:${CIRCLECI_SHA}            
       - persist_to_workspace:
